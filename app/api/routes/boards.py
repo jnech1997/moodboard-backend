@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.db.models.board import Board
 from app.db.models.item import Item
 from app.db.models.cluster_label import ClusterLabel
-from app.schemas.board import BoardPreview
+from app.schemas.board import BoardPreview, BoardCreate
 from app.schemas.cluster import ClusterGroup, ClusterTriggerResponse
 from app.core.services import (
     check_text_safe,
@@ -29,11 +29,11 @@ router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 @router.post("/", response_model=BoardPreview)
 async def generate_board(
-    board: dict,
+    board: BoardCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a new board with mixed content, optimized for speed."""
-    title = board.get("title")
+    title = board.title
 
     if not title:
         db_board = Board(title="Untitled Board")
