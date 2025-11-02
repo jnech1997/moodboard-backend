@@ -176,10 +176,10 @@ async def list_boards(db: AsyncSession = Depends(get_db)):
 @router.patch("/{board_id}", response_model=BoardPreview)
 async def update_board_title(
     board_id: int,
-    data: dict,
+    data: BoardCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    title = data.get("title")
+    title = data.title
 
     if not title:
         raise HTTPException(status_code=422, detail="Title is required")
