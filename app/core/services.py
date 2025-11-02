@@ -129,7 +129,7 @@ async def generate_image_caption_url(url: str) -> str:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Make a concise poetic statement that describes the vibe of this image.",
+                            "text": "Make a concise poetic statement that describes the vibe of this image. Try to use a synonym or related words to the vibe in the statment.",
                         },
                         {"type": "image_url", "image_url": {"url": res.url}},
                     ],
@@ -157,7 +157,7 @@ async def generate_image_caption(image_path: str) -> str:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Make a concise poetic statement that describes the vibe of this image.",
+                            "text": "Make a concise poetic statement that describes the vibe of this image. Try to use a synonym or related words to the vibe in the statment.",
                         },
                         {
                             "type": "image_url",
@@ -213,8 +213,7 @@ async def generate_text_snippets(title: str, count: int = 3) -> List[str]:
 async def generate_captions_batch(title: str, count: int) -> List[str]:
     """Generate multiple poetic captions based on a title in one prompt."""
     prompt = (
-        f"Generate {count} short, poetic, non-rhyming phrases for the title: '{title}'. "
-        "Each phrase should be on its own line. Avoid numbering."
+        f"Generate {count} short, poetic, non-rhyming phrases for the title: '{title}'. Incorporate synonyms of the title or related words, not putting the title in every phrase but maybe one or two, and synonyms or related phrases to the title on the others." "Each phrase should be on its own line. Avoid numbering."
     )
 
     completion = client.chat.completions.create(
