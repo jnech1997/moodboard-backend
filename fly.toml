@@ -7,7 +7,7 @@ primary_region = "iad"
 
 [env]
   # Internal fly Redis URL using your redis app name
-  REDIS_URL = "redis://moodboard-redis.internal:6379/0"
+  REDIS_URL = "redis://moodboard-redis.internal:6379"
 
 # --- Process Definitions ---
 [processes]
