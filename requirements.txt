@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy>=2.0
+asyncpg
+pydantic-settings
+pgvector
+alembic
+openai>=1.0.0
+arq
+scikit-learn==1.5.2
+python-multipart
+requests
