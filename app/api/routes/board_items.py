@@ -14,9 +14,6 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from arq import create_pool
-from arq.connections import RedisSettings
-
 from app.db.session import get_db
 from app.db.models.item import Item
 from app.db.models.board import Board
@@ -28,6 +25,7 @@ from app.core.services import (
     check_image_safe_url,
     generate_image_caption_url,
     generate_image_caption,
+    redis_generate_embedding,
 )
 
 UPLOAD_DIR = "uploads"
@@ -89,9 +87,7 @@ async def add_item(
     await db.commit()
     await db.refresh(new_item)
 
-    # Optional: reuse embedding instead of regenerating
-    redis = await create_pool(RedisSettings(host="redis", port=6379))
-    await redis.enqueue_job("generate_embedding", new_item.id, content, board_id)
+    await redis_generate_embedding(new_item.id, content, board_id)
 
     return new_item
 

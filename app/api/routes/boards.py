@@ -6,9 +6,6 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from arq import create_pool
-from arq.connections import RedisSettings
-
 from app.db.session import get_db
 from app.db.models.board import Board
 from app.db.models.item import Item
@@ -20,6 +17,8 @@ from app.core.services import (
     fetch_pexel_images,
     generate_text_snippets,
     generate_captions_batch,
+    redis_cluster_embeddings,
+    redis_generate_embedding
 )
 
 logger = logging.getLogger(__name__)
@@ -78,12 +77,9 @@ async def generate_board(
             await db.refresh(item)
 
         # Batch enqueue embedding tasks
-        redis = await create_pool(RedisSettings(host="redis", port=6379))
         await asyncio.gather(
             *[
-                redis.enqueue_job(
-                    "generate_embedding", item.id, item.content, db_board.id
-                )
+                redis_generate_embedding(item.id, item.content, db_board.id)
                 for item in items
             ]
         )
@@ -138,8 +134,7 @@ async def get_board(
 @router.post("/{board_id}/cluster", response_model=ClusterTriggerResponse)
 async def cluster_board(board_id: int):
     """Trigger clustering for all items in this board."""
-    redis = await create_pool(RedisSettings(host="redis", port=6379))
-    await redis.enqueue_job("cluster_embeddings", board_id=board_id)
+    await redis_cluster_embeddings(board_id)
     return {"cluster_message": "Clustering job enqueued"}
 
 
