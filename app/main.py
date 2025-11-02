@@ -2,7 +2,6 @@ import os
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
@@ -67,7 +66,6 @@ if ENV == "production":
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(HTTPSRedirectMiddleware)
 
 # Static files
 app.mount("/static", StaticFiles(directory="uploads"), name="static")

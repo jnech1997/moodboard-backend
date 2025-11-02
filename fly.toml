@@ -11,7 +11,7 @@ primary_region = "iad"
 
 # --- Process Definitions ---
 [processes]
-  app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"
+  app = "uvicorn app.main:app --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*'"
   worker = "arq app.core.arq_worker.WorkerSettings"
 
 # --- Public HTTP Service for the API ---
