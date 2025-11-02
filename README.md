@@ -1,6 +1,6 @@
 # 🧠 MoodBoard Backend — FastAPI + Redis Worker + PostgreSQL
 
-This is the backend API for MoodBoard, a visual mood collection and AI-powered clustering platform. It handles all API routes, database operations, async background clustering via Redis workers, and OpenAI-powered AI features.
+This is the backend API for MoodBoard, a visual mood collection and AI-powered clustering platform. It handles all API routes, database operations, async background clustering via Redis workers, and OpenAI-powered AI features: live at https://moodboard.fly.dev/docs.
 
 ---
 
@@ -15,8 +15,6 @@ This is the backend API for MoodBoard, a visual mood collection and AI-powered c
 - scikit-learn – KMeans for semantic clustering
 - Redis – distributed cache and task queue
 
----
-
 ## 📂 Project Structure
 
 backend/
@@ -29,8 +27,6 @@ backend/
 │   └── core/arq_worker.py  # ARQ worker job settings
 ├── Dockerfile
 └── fly.toml
-
----
 
 ## 🛠️ Local Development
 
@@ -86,14 +82,6 @@ https://moodboard.fly.dev/api
 - AI embedding + semantic clustering
 - GPT-powered cluster labeling
 - /static for image uploads
-
----
-
-## 🧪 Testing
-
-pytest
-
----
 
 ## 👤 Author
 
