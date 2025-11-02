@@ -1,0 +1,20 @@
+app = "moodboard-redis"
+primary_region = "iad"
+
+[build]
+  image = "redis:7-alpine"
+
+[processes]
+  app = "redis-server --save 60 1 --loglevel warning"
+
+[[services]]
+  internal_port = 6379
+  protocol = "tcp"
+  processes = ["app"]
+
+  auto_start_machines = true
+  auto_stop_machines = false
+
+  [[services.ports]]
+    port = 6379
+    handlers = ["tls"]

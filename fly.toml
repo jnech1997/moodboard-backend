@@ -1,13 +1,20 @@
+# fly.toml configuration for the Moodboard app
 app = "moodboard"
+primary_region = "iad"
 
 [build]
-  dockerfile = "Dockerfile"   # or Dockerfile.api if that's your filename
+  dockerfile = "Dockerfile"
 
+[env]
+  # Internal fly Redis URL using your redis app name
+  REDIS_URL = "redis://moodboard-redis.internal:6379/0"
+
+# --- Process Definitions ---
 [processes]
   app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"
-  worker = "arq app.worker.WorkerSettings"
+  worker = "arq app.core.arq_worker.WorkerSettings"
 
-# public HTTP service for the API only
+# --- Public HTTP Service for the API ---
 [[services]]
   processes = ["app"]
   internal_port = 8080
@@ -25,3 +32,9 @@ app = "moodboard"
     type = "connections"
     hard_limit = 50
     soft_limit = 40
+
+# --- Machine Resources Per Process ---
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
