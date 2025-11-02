@@ -28,7 +28,7 @@ async def redis_cluster_embeddings(board_id: int):
         os.getenv("REDIS_URL")
     )
     redis = await create_pool(redis_settings)
-    redis.enqueue_job("cluster_embeddings", board_id=board_id)
+    await redis.enqueue_job("cluster_embeddings", board_id=board_id)
 
 async def redis_generate_embedding(item_id: int, content: str, board_id: int):
     redis_settings = RedisSettings.from_dsn(
