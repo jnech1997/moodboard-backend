@@ -54,6 +54,19 @@ if ENV == "development":
 else:
     logger.info("Running in production environment - CORS restricted")
 
+if ENV == "production":
+    origins = [
+        "https://moodboard-frontend-ten.vercel.app",  # deployed frontend
+    ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 # Static files
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
