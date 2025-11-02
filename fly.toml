@@ -23,12 +23,10 @@ primary_region = "iad"
   [[services.ports]]
     handlers = ["tls", "http"]
     port = 443
-    force_https = true
 
   [[services.ports]]
     handlers = ["http"]
     port = 80
-    force_https = true
 
   [services.concurrency]
     type = "connections"
