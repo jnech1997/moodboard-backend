@@ -17,16 +17,7 @@ This is the backend API for MoodBoard, a visual mood collection and AI-powered c
 
 ## 📂 Project Structure
 
-backend/
-├── app/
-│   ├── core/         # environment, settings, worker config
-│   ├── db/           # models, database session, migrations
-│   ├── routers/      # API endpoints organized by feature
-│   ├── schemas/      # Pydantic schemas for request/response
-│   ├── main.py       # FastAPI entry point
-│   └── core/arq_worker.py  # ARQ worker job settings
-├── Dockerfile
-└── fly.toml
+<pre> ```bash backend/ ├── app/ │ ├── core/ # environment, settings, worker config │ ├── db/ # models, database session, migrations │ ├── routers/ # API endpoints organized by feature │ ├── schemas/ # Pydantic schemas for request/response │ ├── main.py # FastAPI entry point │ └── core/arq_worker.py # ARQ worker job settings ├── Dockerfile └── fly.toml ``` </pre>
 
 ## 🛠️ Local Development
 
