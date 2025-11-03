@@ -6,6 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from app.db.base import Base
+from arq import create_pool
+from arq.connections import RedisSettings
 from app.db.session import engine
 from app.api.routes import boards, board_items, search, system
 
@@ -23,11 +25,14 @@ async def lifespan(app: FastAPI):
     # Startup logic
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    app.state.redis = await create_pool(RedisSettings.from_dsn(os.getenv("REDIS_URL")))
     logger.info("Database initialized")
 
     yield  # App runs here
 
     # Shutdown logic (if needed)
+    await app.state.redis.close()
+    await app.state.redis.connection_pool.disconnect()
     logger.info("Shutting down...")
 
 

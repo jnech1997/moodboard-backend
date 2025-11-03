@@ -4,8 +4,6 @@ import base64
 import logging
 from typing import List
 import requests
-from arq.connections import RedisSettings
-from arq import create_pool
 from openai import OpenAI
 
 # Environment
@@ -23,18 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 # --- Moderation and Embedding Utilities --- #
-async def redis_cluster_embeddings(board_id: int):    
-    redis_settings = RedisSettings.from_dsn(
-        os.getenv("REDIS_URL")
-    )
-    redis = await create_pool(redis_settings)
+async def redis_cluster_embeddings(redis, board_id: int):   
     await redis.enqueue_job("cluster_embeddings", board_id=board_id)
 
-async def redis_generate_embedding(item_id: int, content: str, board_id: int):
-    redis_settings = RedisSettings.from_dsn(
-        os.getenv("REDIS_URL")
-    )
-    redis = await create_pool(redis_settings)
+async def redis_generate_embedding(redis, item_id: int, content: str, board_id: int):
     await redis.enqueue_job("generate_embedding", item_id, content, board_id)
 
 async def check_text_safe(text: str) -> bool:

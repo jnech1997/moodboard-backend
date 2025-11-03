@@ -148,7 +148,6 @@ cluster_embeddings.retry_delay = 10  # seconds
 
 class WorkerSettings:
     """ARQ worker configuration."""
-
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
     functions = [generate_embedding, cluster_embeddings]
     keep_result = 0

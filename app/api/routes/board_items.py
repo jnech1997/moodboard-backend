@@ -10,6 +10,7 @@ from fastapi import (
     UploadFile,
     File,
     status,
+    Request
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,7 @@ router = APIRouter(prefix="/api/boards/{board_id}/items", tags=["items"])
 
 @router.post("/", response_model=ItemRead)
 async def add_item(
+    request: Request,
     board_id: int,
     item: ItemCreate,  # We'll extend this model
     db: AsyncSession = Depends(get_db),
@@ -87,7 +89,8 @@ async def add_item(
     await db.commit()
     await db.refresh(new_item)
 
-    await redis_generate_embedding(new_item.id, content, board_id)
+    redis = request.app.state.redis
+    await redis_generate_embedding(redis, new_item.id, content, board_id)
 
     return new_item
 

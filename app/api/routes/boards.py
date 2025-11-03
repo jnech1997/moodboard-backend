@@ -1,7 +1,7 @@
 import logging
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,8 +28,9 @@ router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 @router.post("/", response_model=BoardPreview)
 async def generate_board(
+    request: Request,
     board: BoardCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
     """Generate a new board with mixed content, optimized for speed."""
     title = board.title
@@ -63,7 +64,8 @@ async def generate_board(
         images, texts = await asyncio.gather(images_task, texts_task)
 
         # Generate image captions in batch (faster)
-        captions = await generate_captions_batch(title, count=10)
+        image_count = len(images)
+        captions = await generate_captions_batch(title, count=image_count)
 
         # Create items in batch
         items = [
@@ -76,19 +78,16 @@ async def generate_board(
         for item in items:
             await db.refresh(item)
 
-        # Batch enqueue embedding tasks
-        await asyncio.gather(
-            *[
-                redis_generate_embedding(item.id, item.content, db_board.id)
-                for item in items
-            ]
-        )
+        # Dispatch embedding tasks
+        redis = request.app.state.redis
+        for item in items:
+            await redis_generate_embedding(redis, item.id, item.content, db_board.id)
 
         # Build preview from first few items
         previews = [
             {"id": item.id, "image_url": item.image_url, "type": item.type}
             for item in items
-            if bool(item.image_url)
+            if item.image_url
         ][:6]
 
     except Exception as e:
@@ -121,7 +120,7 @@ async def get_board(
     previews = [
         {"id": i.id, "image_url": i.image_url, "type": i.type}
         for i in items
-        if i.image_url and i.embedding is not None
+        if i.image_url
     ][:6]
 
     return {
@@ -132,9 +131,13 @@ async def get_board(
 
 
 @router.post("/{board_id}/cluster", response_model=ClusterTriggerResponse)
-async def cluster_board(board_id: int):
+async def cluster_board(
+    request: Request,
+    board_id: int
+):
     """Trigger clustering for all items in this board."""
-    await redis_cluster_embeddings(board_id)
+    redis = request.app.state.redis
+    await redis_cluster_embeddings(redis, board_id)
     return {"cluster_message": "Clustering job enqueued"}
 
 
@@ -154,7 +157,7 @@ async def list_boards(db: AsyncSession = Depends(get_db)):
         previews = [
             {"id": i.id, "image_url": i.image_url, "type": i.type}
             for i in items
-            if i.image_url and i.embedding is not None
+            if i.image_url
         ][:6]
 
         response.append(
@@ -217,7 +220,7 @@ async def list_clusters(
             "items": [
                 {"id": i.id, "content": i.content, "image_url": i.image_url}
                 for i in items
-                if bool(i.cluster_id == cid)
+                if i.cluster_id == cid
             ],
         }
         for cid in sorted({i.cluster_id for i in items if i.cluster_id is not None})
