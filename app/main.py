@@ -73,6 +73,8 @@ if ENV == "production":
         allow_headers=["*"],
     )
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Static files
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
