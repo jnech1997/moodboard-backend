@@ -2,7 +2,7 @@ name: Keep Fly App Warm
 
 on:
   schedule:
-    - cron: "*/3 * * * *" # every 10 minutes
+    - cron: "*/10 * * * *" # every 10 minutes
   workflow_dispatch: # allows manual runs too
 
 jobs:
