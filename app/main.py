@@ -1,14 +1,15 @@
 import os
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 
 from app.db.base import Base
 from arq import create_pool
 from arq.connections import RedisSettings
-from app.db.session import engine
+from app.db.session import engine, async_session
 from app.api.routes import boards, board_items, search, system
 
 # Load logging config if present
@@ -83,5 +84,38 @@ app.include_router(system.router)
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
-def health():
-    return {"status": "ok"}
+async def health(request: Request):
+    status = {
+        "api": "ok",
+        "database": None,
+        "redis": None,
+        "worker": None,
+    }
+
+    # Check database connection
+    try:
+        async with async_session() as db:
+            await db.execute(text("SELECT 1"))
+        status["database"] = "connected"
+    except Exception as e:
+        status["database"] = f"error: {str(e)}"
+
+    # Check Redis from app state
+    try:
+        redis = request.app.state.redis
+        await redis.ping()
+        status["redis"] = "connected"
+    except Exception as e:
+        status["redis"] = f"error: {str(e)}"
+
+    # Worker check…
+    try:
+        heartbeat = await redis.get("arq:heartbeat")
+        if heartbeat:
+            status["worker"] = "running"
+        else:
+            status["worker"] = "not reporting"
+    except Exception as e:
+        status["worker"] = f"error: {str(e)}"
+
+    return status

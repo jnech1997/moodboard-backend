@@ -2,10 +2,12 @@ import asyncio
 import logging
 import os
 import sys
+import time
 from typing import cast
 
 from pgvector.sqlalchemy import Vector
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert
@@ -145,9 +147,17 @@ async def cluster_embeddings(ctx, board_id: int):
 cluster_embeddings.max_tries = 3
 cluster_embeddings.retry_delay = 10  # seconds
 
+async def worker_heartbeat(ctx):
+    redis = ctx["redis"]
+    await redis.set(
+        "arq:heartbeat", str(time.time()), ex=60
+    )  # expire in 60 seconds
 
 class WorkerSettings:
     """ARQ worker configuration."""
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
     functions = [generate_embedding, cluster_embeddings]
+    cron_jobs = [
+        cron(worker_heartbeat, second= 0),  # every minute
+    ]
     keep_result = 0
