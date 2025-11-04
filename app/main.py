@@ -73,10 +73,10 @@ if ENV == "production":
         allow_headers=["*"],
     )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+STATIC_FILES_DIR = "/app/static"
+os.makedirs(STATIC_FILES_DIR, exist_ok=True)
 # Static files
-app.mount("/static", StaticFiles(directory="uploads"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_FILES_DIR), name="static")
 
 # API routes
 app.include_router(boards.router)
