@@ -1,15 +1,12 @@
-name: Keep Fly App Warm
+name: Test Cron
 
 on:
   schedule:
-    - cron: "*/10 * * * *" # every 10 minutes
+    - cron: "*/2 * * * *" # every 2 minutes
 
 jobs:
-  ping:
+  log:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Wake up the backend
-        run: |
-          echo "Pinging app..."
-          curl -s -o /dev/null -w "%{http_code}" https://moodboard.fly.dev/api/health || exit 1
+      - name: Say hi
+        run: echo "Action triggered at $(date)"
