@@ -20,16 +20,15 @@ from app.db.models.item import Item
 from app.db.models.board import Board
 from app.schemas.item import ItemCreate, ItemRead
 from app.core.services import (
-    get_text_embedding,
     check_text_safe,
     check_image_safe,
     check_image_safe_url,
-    generate_image_caption_url,
-    generate_image_caption,
     redis_generate_embedding,
+    redis_process_image_item,
+    generate_image_data
 )
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "/app/static"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
@@ -79,8 +78,7 @@ async def add_item(
             raise HTTPException(
                 status_code=400, detail="Image violates content policy."
             )
-        image_url = item.image_url
-        content = await generate_image_caption_url(item.image_url)
+        content = None
 
     new_item = Item(
         board_id=board_id, type=item.type, content=content, image_url=image_url
@@ -90,7 +88,15 @@ async def add_item(
     await db.refresh(new_item)
 
     redis = request.app.state.redis
-    await redis_generate_embedding(redis, new_item.id, content, board_id)
+
+    if new_item.type == "image" and new_item.image_url:
+        await redis_process_image_item(
+            redis, item_id=new_item.id, image_url=new_item.image_url, board_id=board_id
+        )
+    else:
+        await redis_generate_embedding(
+            redis, item_id=new_item.id, content=new_item.content, board_id=board_id
+        )
 
     return new_item
 
@@ -117,6 +123,7 @@ async def list_items(
 
 @router.post("/upload", response_model=dict)
 async def upload_item_image(
+    request: Request,
     board_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -134,42 +141,41 @@ async def upload_item_image(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Moderation check
+    # Moderation
     is_safe = await check_image_safe(file_path)
     if not is_safe:
-        logger.info(f"Moderation: flagged for image='{file.filename}'")
         os.remove(file_path)
         raise HTTPException(
             status_code=400,
             detail="Inappropriate image content.",
         )
 
-    # Caption generation
-    caption = await generate_image_caption(file_path)
+    # Store relative path in DB
+    relative_static_url = f"{filename}"  # not including `/static/`
 
-    # Embedding from caption
-    embedding = await get_text_embedding(caption)
+    # Construct full URL using FastAPI
+    full_image_url = request.url_for("static", path=relative_static_url)
 
-    # Save in DB
-    image_url = f"/static/{filename}"
+    # Generate metadata
+    description, caption, embedding = await generate_image_data(str(full_image_url))
+
+    # Save item
     item = Item(
         board_id=board_id,
         type="image",
-        image_url=image_url,
+        image_url=f"/static/{relative_static_url}",  # keep as relative path in DB
         content=caption,
         embedding=embedding,
     )
-
     db.add(item)
     await db.commit()
     await db.refresh(item)
 
     return {
         "id": item.id,
-        "image_url": image_url,
+        "image_url": item.image_url,
         "caption": caption,
     }
-
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(

@@ -19,7 +19,7 @@ from openai import AsyncOpenAI
 from app.db.session import async_session
 from app.db.models import Item
 from app.db.models.cluster_label import ClusterLabel
-from app.core.services import get_text_embedding
+from app.core.services import get_text_embedding, generate_image_data
 
 # Logging configuration
 logging.basicConfig(
@@ -37,18 +37,54 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 async def generate_embedding(ctx, item_id: int, content: str, board_id: int):
     """Background job: generate and store embedding for a single item."""
     logger.info(f"🔹 Generating embedding for item {item_id}")
-    embedding = await get_text_embedding(content)
 
-    async with async_session() as db:
-        item = await db.get(Item, item_id)
-        if not item:
-            logger.info(f"⚠️ Item {item_id} not found")
-            return
+    try: 
+        embedding = await get_text_embedding(content)
+        async with async_session() as db:
+            item = await db.get(Item, item_id)
+            if not item:
+                logger.info(f"⚠️ Item {item_id} not found")
+                return
 
-        item.embedding = cast(Vector, embedding)  # type: ignore
-        await db.commit()
-        logger.info(f"✅ Stored embedding for item {item_id}")
+            item.embedding = cast(Vector, embedding)  # type: ignore
+            await db.commit()
+            logger.info(f"✅ Stored embedding for item {item_id}")
 
+    except Exception as e:
+        logger.error(f"❌ Failed to process text item {item_id}: {e}", exc_info=True)
+
+        async with async_session() as db:
+            logger.info(f"🗑️ Deleting failed text item {item_id}")
+            await db.delete(await db.get(Item, item_id))
+            await db.commit()
+
+
+async def process_image_item(ctx, item_id: int, image_url: str, board_id: int):
+    """Process image entry: generate description, caption, embedding."""
+    logger.info(f"🔹 Processing image item {item_id}")
+
+    try:
+        description, caption, embedding = await generate_image_data(image_url)
+
+        async with async_session() as db:
+            item = await db.get(Item, item_id)
+            if not item:
+                logger.warning(f"⚠️ Item {item_id} not found")
+                return
+
+            item.content = caption  # Poetic caption for display
+            item.embedding = embedding  # Derived from description
+            await db.commit()
+
+        logger.info(f"✅ Stored processed image item {item_id}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to process image item {item_id}: {e}", exc_info=True)
+
+        async with async_session() as db:
+            logger.info(f"🗑️ Deleting failed image item {item_id}")
+            await db.delete(await db.get(Item, item_id))
+            await db.commit()
 
 async def cluster_embeddings(ctx, board_id: int):
     """Cluster items for a board based on their embeddings and label the clusters."""
@@ -156,8 +192,19 @@ async def worker_heartbeat(ctx):
 class WorkerSettings:
     """ARQ worker configuration."""
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
-    functions = [generate_embedding, cluster_embeddings]
+    
+    # override/add custom connection settings
+    redis_settings.conn_timeout = 30  # increases connection timeout to 30 sec
+    redis_settings.socket_connect_timeout = 30  # or use this depending on redis-py version
+    redis_settings.retry_on_timeout = True  # auto-retry
+
+    functions = [
+        generate_embedding, 
+        process_image_item,
+        cluster_embeddings
+    ]
     cron_jobs = [
         cron(worker_heartbeat, second= 0),  # every minute
     ]
     keep_result = 0
+    max_jobs = 20  # allow more concurrent jobs per worker

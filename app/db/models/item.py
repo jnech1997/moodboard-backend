@@ -9,8 +9,8 @@ class Item(Base):
     id = Column(Integer, primary_key=True, index=True)
     board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"))
     type = Column(String, default="text")  # "text" or "image"
-    content = Column(String, nullable=False)
-    image_url = Column(String, nullable=True)  # 🔹 new
+    content = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
     embedding = Column(Vector(1536))
     cluster_id = Column(Integer, nullable=True)
 

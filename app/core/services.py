@@ -2,9 +2,12 @@ import os
 import sys
 import base64
 import logging
+import json
+import asyncio
+import httpx
 from typing import List
 import requests
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 # Environment
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -27,6 +30,10 @@ async def redis_cluster_embeddings(redis, board_id: int):
 async def redis_generate_embedding(redis, item_id: int, content: str, board_id: int):
     await redis.enqueue_job("generate_embedding", item_id, content, board_id)
 
+async def redis_process_image_item(redis, item_id: int, image_url: str, board_id: int):
+    await redis.enqueue_job("process_image_item", item_id, image_url, board_id)
+
+
 async def check_text_safe(text: str) -> bool:
     """Use OpenAI moderation to check text content."""
     logger.info("Running text safety check")
@@ -44,6 +51,74 @@ async def get_text_embedding(text: str) -> List[float]:
         input=text,
     )
     return response.data[0].embedding
+
+
+async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
+    """
+    Generate description, poetic caption, and embedding for an image URL.
+    Handles rate limits with retries.
+    """
+    for attempt in range(5):  # try up to 5 times
+        try:
+            # Determine if the image is a URL or a local file path
+            if url.startswith(("http://", "https://")):
+                # Remote URL case
+                async with httpx.AsyncClient(timeout=30.0) as http_client:
+                    response = await http_client.get(url)
+                    response.raise_for_status()
+                img_bytes = response.content
+            else:
+                # Local file path case
+                with open(url, "rb") as img_file:
+                    img_bytes = img_file.read()
+
+            # Convert to Base64 data URI
+            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            data_url = f"data:image/jpeg;base64,{img_b64}"
+
+            completion = client.chat.completions.create(
+                model="gpt-4o-mini",  # low-cost model
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You describe images briefly and clearly."
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "\n1. Provide a description of the scene (1-2 sentences)."
+                                    "2. A short caption based on this image's vibe (5–7 words).\n"
+                                    "\nReturn the response in JSON format with 'description' and 'caption' keys."
+                                )
+                            },
+                            {"type": "image_url", "image_url": {"url": data_url}},
+                        ],
+                    },
+                ],
+                response_format={"type": "json_object"},
+            )
+
+            raw_content = completion.choices[0].message.content.strip()
+            data = json.loads(raw_content)
+
+            description = data["description"]
+            caption = data["caption"]
+
+            embedding = await get_text_embedding(description)
+
+            return description, caption, embedding
+
+        except RateLimitError as e:
+            wait_time = 2**attempt  # exponential backoff: 1s, 2s, 4s, 8s...
+            print(f"⚠️ Rate limit for image data, retrying in {wait_time}s...")
+            await asyncio.sleep(wait_time)
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate image data quickly: {e}")
+
+    raise RuntimeError("Exceeded retry attempts for generate_image_data")
 
 
 # --- Image Moderation and Captioning --- #
@@ -103,34 +178,6 @@ def encode_image(image_path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-async def generate_image_caption_url(url: str) -> str:
-    """Generate a poetic image caption based on a remote image URL."""
-    try:
-        res = requests.get(url, allow_redirects=True)
-        completion = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You describe images briefly and clearly.",
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Make a concise poetic statement that describes the vibe of this image. Try to use a synonym or related words to the vibe in the statment.",
-                        },
-                        {"type": "image_url", "image_url": {"url": res.url}},
-                    ],
-                },
-            ],
-        )
-        return str(completion.choices[0].message.content).strip()
-    except Exception as e:
-        return f"Could not process image: {e}"
-
-
 async def generate_image_caption(image_path: str) -> str:
     """Generate a poetic image caption for a local image."""
     try:
@@ -147,7 +194,7 @@ async def generate_image_caption(image_path: str) -> str:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Make a concise poetic statement that describes the vibe of this image. Try to use a synonym or related words to the vibe in the statment.",
+                            "text": "Provide a short poetic caption (7 words max).",
                         },
                         {
                             "type": "image_url",
@@ -198,18 +245,3 @@ async def generate_text_snippets(title: str, count: int = 3) -> List[str]:
     raw_output = str(completion.choices[0].message.content).strip()
     snippets = [line.strip("- ") for line in raw_output.split("\n") if line.strip()]
     return snippets[:count]
-
-
-async def generate_captions_batch(title: str, count: int) -> List[str]:
-    """Generate multiple poetic captions based on a title in one prompt."""
-    prompt = (
-        f"Generate {count} short, poetic, non-rhyming phrases for the title: '{title}'. Incorporate synonyms of the title or related words, not putting the title in every phrase but maybe one or two, and synonyms or related phrases to the title on the others." "Each phrase should be on its own line. Avoid numbering."
-    )
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=200,
-    )
-    captions = str(completion.choices[0].message.content).strip().split("\n")
-    return [cap.strip() for cap in captions if cap.strip()]

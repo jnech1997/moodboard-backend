@@ -16,9 +16,9 @@ from app.core.services import (
     check_text_safe,
     fetch_pexel_images,
     generate_text_snippets,
-    generate_captions_batch,
+    redis_process_image_item,
     redis_cluster_embeddings,
-    redis_generate_embedding
+    redis_generate_embedding,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,15 +63,12 @@ async def generate_board(
         texts_task = generate_text_snippets(title=title, count=5)
         images, texts = await asyncio.gather(images_task, texts_task)
 
-        # Generate image captions in batch (faster)
-        image_count = len(images)
-        captions = await generate_captions_batch(title, count=image_count)
-
         # Create items in batch
+        # Create DB entries for items
         items = [
-            Item(type="image", board_id=db_board.id, image_url=img, content=cap)
-            for img, cap in zip(images, captions)
+            Item(type="image", board_id=db_board.id, image_url=img) for img in images
         ] + [Item(type="text", board_id=db_board.id, content=txt) for txt in texts]
+
         db.add_all(items)
         await db.commit()
 
@@ -81,7 +78,10 @@ async def generate_board(
         # Dispatch embedding tasks
         redis = request.app.state.redis
         for item in items:
-            await redis_generate_embedding(redis, item.id, item.content, db_board.id)
+            if item.type == "image" and item.image_url:
+                await redis_process_image_item(redis, item.id, item.image_url, db_board.id)
+            else:
+                await redis_generate_embedding(redis, item.id, item.content, db_board.id)
 
         # Build preview from first few items
         previews = [

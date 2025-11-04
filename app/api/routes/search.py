@@ -20,16 +20,29 @@ async def search_items(
     # Get query embedding
     query_emb = await get_text_embedding(q)
 
-    # Perform similarity search using PostgreSQL <=> operator
     sql = text("""
-        SELECT id, board_id, content, image_url, type,
-               1 - (embedding <=> (:query_emb)::vector) AS similarity
-        FROM items
-        WHERE embedding IS NOT NULL
-        ORDER BY embedding <=> (:query_emb)::vector
-        LIMIT :limit
+        WITH img_items AS (
+            SELECT id, board_id, content, image_url, type,
+                1 - (embedding <=> (:query_emb)::vector) AS similarity
+            FROM items
+            WHERE embedding IS NOT NULL
+            AND image_url IS NOT NULL
+            ORDER BY embedding <=> (:query_emb)::vector
+            LIMIT 12
+        ),
+        text_items AS (
+            SELECT id, board_id, content, image_url, type,
+                1 - (embedding <=> (:query_emb)::vector) AS similarity
+            FROM items
+            WHERE embedding IS NOT NULL
+            AND image_url IS NULL
+            ORDER BY embedding <=> (:query_emb)::vector
+            LIMIT 12
+        )
+        SELECT * FROM img_items
+        UNION ALL
+        SELECT * FROM text_items
     """)
-
     rows = await db.execute(sql, {"query_emb": str(query_emb), "limit": limit})
     results = rows.mappings().all()
 
