@@ -63,10 +63,12 @@ async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
             # Determine if the image is a URL or a local file path
             if url.startswith(("http://", "https://")):
                 # Remote URL case
-                async with httpx.AsyncClient(timeout=30.0) as http_client:
-                    response = await http_client.get(url)
-                    response.raise_for_status()
-                img_bytes = response.content
+                semaphore = asyncio.Semaphore(5)
+                async with semaphore:
+                    async with httpx.AsyncClient(timeout=30.0) as http_client:
+                        response = await http_client.get(url)
+                        response.raise_for_status()
+                    img_bytes = response.content
             else:
                 # Local file path case
                 with open(url, "rb") as img_file:
@@ -106,6 +108,8 @@ async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
 
             description = data["description"]
             caption = data["caption"]
+
+            await asyncio.sleep(0.5)
 
             embedding = await get_text_embedding(description)
 

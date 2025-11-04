@@ -207,3 +207,4 @@ class WorkerSettings:
         cron(worker_heartbeat, second= 0),  # every minute
     ]
     keep_result = 0
+    max_jobs = 5  # allow more concurrent jobs per worker
