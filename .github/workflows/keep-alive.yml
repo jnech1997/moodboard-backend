@@ -3,7 +3,6 @@ name: Keep Fly App Warm
 on:
   schedule:
     - cron: "*/10 * * * *" # every 10 minutes
-  workflow_dispatch: # allows manual runs too
 
 jobs:
   ping:
