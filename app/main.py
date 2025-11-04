@@ -82,6 +82,6 @@ app.include_router(search.router)
 app.include_router(system.router)
 
 
-@app.get("/api/health")
+@app.get("/api/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok"}
