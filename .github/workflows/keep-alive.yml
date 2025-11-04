@@ -12,4 +12,5 @@ jobs:
     steps:
       - name: Wake up the backend
         run: |
+          echo "Pinging app..."
           curl -s -o /dev/null -w "%{http_code}" https://moodboard.fly.dev/api/health || exit 1
