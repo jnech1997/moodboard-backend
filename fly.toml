@@ -19,6 +19,8 @@ primary_region = "iad"
   processes = ["app"]
   internal_port = 8080
   protocol = "tcp"
+  auto_start_machines = true
+  auto_stop_machines = false
 
   [[services.ports]]
     handlers = ["tls", "http"]
