@@ -82,9 +82,13 @@ async def process_image_item(ctx, item_id: int, image_url: str, board_id: int):
         logger.error(f"❌ Failed to process image item {item_id}: {e}", exc_info=True)
 
         async with async_session() as db:
-            logger.info(f"🗑️ Deleting failed image item {item_id}")
-            await db.delete(await db.get(Item, item_id))
-            await db.commit()
+            item = await db.get(Item, item_id)
+            if item:
+                await db.delete(item)
+                await db.commit()
+                logger.info(f"🗑️ Removed failed image item {item_id}")
+            else:
+                logger.warning(f"⚠️ Item {item_id} not found during deletion")
 
 async def cluster_embeddings(ctx, board_id: int):
     """Cluster items for a board based on their embeddings and label the clusters."""
