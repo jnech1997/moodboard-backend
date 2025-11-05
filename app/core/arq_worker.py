@@ -96,7 +96,7 @@ async def cluster_embeddings(ctx, board_id: int):
     redis = ctx["redis"]
 
     # Acquire lock to prevent concurrent clustering
-    if not await redis.setnx(lock_key, "1"):
+    if not await redis.setnx(lock_key, "1", nx=True, ex=15):
         logger.warning("⚠️ Clustering already running. Skipping.")
         return
     await redis.expire(lock_key, 300)
