@@ -9,7 +9,7 @@ from pgvector.sqlalchemy import Vector
 from arq.connections import RedisSettings
 from arq.cron import cron
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.dialects.postgresql import insert
 
 from sklearn.cluster import KMeans
@@ -107,6 +107,13 @@ async def cluster_embeddings(ctx, board_id: int):
         # Retrieve items with embeddings
         async with async_session() as db:
             async with db.begin():
+                # Clear all cluster IDs for this board before reclustering
+                await db.execute(
+                    update(Item)
+                    .where(Item.board_id == board_id)
+                    .values(cluster_id=None)
+                )
+
                 result = await db.execute(
                     select(Item).where(
                         Item.board_id == board_id,
