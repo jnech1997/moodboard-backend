@@ -1,8 +1,11 @@
 import os
 import logging
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from datetime import datetime
 from sqlalchemy import text
 from contextlib import asynccontextmanager
 
@@ -94,30 +97,61 @@ async def health(request: Request):
         "worker": None,
     }
 
-    # Check database connection
+    http_status = 200
+
+    # --- Database check ---
     try:
         async with async_session() as db:
             await db.execute(text("SELECT 1"))
         status["database"] = "connected"
     except Exception as e:
-        status["database"] = f"error: {str(e)}"
+        status["database"] = f"error: {e}"
+        http_status = 503
 
-    # Check Redis from app state
+    # --- Redis check with lazy reconnect + backoff ---
     try:
         redis = request.app.state.redis
-        await redis.ping()
-        status["redis"] = "connected"
+        try:
+            await redis.ping()
+            status["redis"] = "connected"
+        except Exception:
+            logger.warning("Redis connection lost — attempting reconnect...")
+            redis = await reconnect_redis_with_backoff()
+            request.app.state.redis = redis
+            status["redis"] = "reinitialized"
     except Exception as e:
-        status["redis"] = f"error: {str(e)}"
+        status["redis"] = f"error: {e}"
+        http_status = 503
 
-    # Worker check…
+    # --- Worker heartbeat ---
     try:
-        heartbeat = await redis.get("arq:heartbeat")
+        heartbeat = await request.app.state.redis.get("arq:heartbeat")
         if heartbeat:
-            status["worker"] = "running"
+            last_heartbeat = datetime.fromtimestamp(float(heartbeat))
+            status["worker"] = f"running (last heartbeat {last_heartbeat.isoformat()})"
         else:
             status["worker"] = "not reporting"
+            http_status = 503
     except Exception as e:
-        status["worker"] = f"error: {str(e)}"
+        status["worker"] = f"error: {e}"
+        http_status = 503
 
-    return status
+    return JSONResponse(content=status, status_code=http_status)
+
+
+async def reconnect_redis_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
+    """
+    Attempt to reconnect to Redis using exponential backoff.
+    Returns the new Redis pool or raises after all retries fail.
+    """
+    for attempt in range(max_retries):
+        try:
+            redis = await create_pool(RedisSettings.from_dsn(os.getenv("REDIS_URL")))
+            await redis.ping()
+            logger.info(f"Redis reconnected on attempt {attempt + 1}")
+            return redis
+        except Exception as e:
+            wait_time = base_delay * (2**attempt)
+            logger.warning(f"Redis reconnect attempt {attempt + 1} failed: {e}")
+            await asyncio.sleep(wait_time)
+    raise RuntimeError("Failed to reconnect to Redis after multiple attempts")

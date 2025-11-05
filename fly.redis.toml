@@ -5,7 +5,7 @@ primary_region = "iad"
   image = "redis:7-alpine"
 
 [processes]
-  app = "redis-server --save 60 1 --loglevel warning"
+  app = "redis-server --save 60 1 --loglevel warning --timeout 0"
 
 [[services]]
   internal_port = 6379
@@ -14,7 +14,24 @@ primary_region = "iad"
 
   auto_start_machines = true
   auto_stop_machines = false
+  min_machines_running = 1  # ensures Redis is never "cold stopped"
 
   [[services.ports]]
     port = 6379
     handlers = ["tls"]
+
+# Add a simple TCP health check to detect Redis hangs or crashes
+[checks]
+  [checks.redis]
+    port = 6379
+    type = "tcp"
+    interval = "15s"
+    timeout = "3s"
+
+# Optional: for reliability on restarts
+[deploy]
+  strategy = "rolling"
+
+[metrics]
+  port = 9121
+  path = "/metrics"
