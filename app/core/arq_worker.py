@@ -231,7 +231,7 @@ async def run_worker_forever():
     backoff = 1
     while True:
         try:
-            worker = Worker(WorkerSettings)
+            worker = Worker(WorkerSettings())
             logger.info("🚀 Starting ARQ worker...")
             await worker.async_run()
         except Exception as e:
