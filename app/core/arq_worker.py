@@ -6,9 +6,8 @@ import time
 from typing import cast
 
 from pgvector.sqlalchemy import Vector
-from arq import Worker
+from arq import cron, Worker
 from arq.connections import RedisSettings
-from arq.cron import cron
 
 from sqlalchemy import select, delete, update
 from sqlalchemy.dialects.postgresql import insert
@@ -201,27 +200,6 @@ async def worker_heartbeat(ctx):
         "arq:heartbeat", str(time.time()), ex=60
     )  # expire in 60 seconds
 
-class WorkerSettings:
-    """ARQ worker configuration."""
-
-    rs = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
-    rs.conn_timeout = 30
-    rs.conn_retries = 5
-    rs.conn_retry_delay = 1.0
-
-    redis_settings = rs
-
-    functions = [
-        generate_embedding,
-        process_image_item,
-        cluster_embeddings,
-    ]
-    cron_jobs = [
-        cron(worker_heartbeat, second=0),
-    ]
-    keep_result = 0
-    max_jobs = 5
-
 
 async def run_worker_forever():
     """
@@ -231,7 +209,19 @@ async def run_worker_forever():
     backoff = 1
     while True:
         try:
-            worker = Worker(WorkerSettings())
+            worker = Worker(
+                functions = [
+                    generate_embedding,
+                    process_image_item,
+                    cluster_embeddings,
+                ],
+                redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL")),
+                cron_jobs = [
+                    cron(worker_heartbeat, second=0),
+                ],
+                keep_result = 0,
+                max_jobs = 5,
+            )
             logger.info("🚀 Starting ARQ worker...")
             await worker.async_run()
         except Exception as e:
