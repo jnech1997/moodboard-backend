@@ -16,7 +16,7 @@ primary_region = "iad"
 
 [processes]
   app = "uvicorn app.main:app --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*'"
-  worker = "arq app.core.arq_worker.WorkerSettings"
+  worker = "python app/core/arq_worker.py"
 
 # ------------------------------------------------------------------
 # Restart policy — ensures worker and API recover from failures

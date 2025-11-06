@@ -6,6 +6,7 @@ import time
 from typing import cast
 
 from pgvector.sqlalchemy import Vector
+from arq import Worker
 from arq.connections import RedisSettings
 from arq.cron import cron
 
@@ -202,20 +203,48 @@ async def worker_heartbeat(ctx):
 
 class WorkerSettings:
     """ARQ worker configuration."""
-    redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
-    
-    # override/add custom connection settings
-    redis_settings.conn_timeout = 30  # increases connection timeout to 30 sec
-    redis_settings.socket_connect_timeout = 30  # or use this depending on redis-py version
-    redis_settings.retry_on_timeout = True  # auto-retry
+
+    rs = RedisSettings.from_dsn(os.getenv("REDIS_URL"))
+    rs.conn_timeout = 30
+    rs.conn_retries = 5
+    rs.conn_retry_delay = 1.0
+
+    redis_settings = rs
 
     functions = [
-        generate_embedding, 
+        generate_embedding,
         process_image_item,
-        cluster_embeddings
+        cluster_embeddings,
     ]
     cron_jobs = [
-        cron(worker_heartbeat, second= 0),  # every minute
+        cron(worker_heartbeat, second=0),
     ]
     keep_result = 0
-    max_jobs = 5  # allow more concurrent jobs per worker
+    max_jobs = 5
+
+
+async def run_worker_forever():
+    """
+    Resilient loop that keeps the ARQ worker running.
+    Restarts worker on failure with exponential backoff.
+    """
+    backoff = 1
+    while True:
+        try:
+            worker = Worker(WorkerSettings)
+            logger.info("🚀 Starting ARQ worker...")
+            await worker.async_run()
+        except Exception as e:
+            logger.error(f"❌ Worker crashed: {e}", exc_info=True)
+            logger.info(f"🔁 Restarting worker in {backoff} seconds...")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)  # Max backoff 1 minute
+        else:
+            backoff = 1  # Reset backoff on clean exit
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_worker_forever())
+    except KeyboardInterrupt:
+        logger.info("🛑 Worker manually stopped.")
