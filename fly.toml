@@ -7,7 +7,7 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  REDIS_URL = "redis://moodboard-redis.internal:6379"
+  REDIS_URL = "redis://moodboard-redis.internal:6379/0"
   APP_ENV = "production"
 
 # ------------------------------------------------------------------
