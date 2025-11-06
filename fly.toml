@@ -1,4 +1,5 @@
-# fly.toml configuration for the Moodboard app
+# fly.toml — moodboard full deployment
+
 app = "moodboard"
 primary_region = "iad"
 
@@ -6,21 +7,42 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  # Internal fly Redis URL using your redis app name
   REDIS_URL = "redis://moodboard-redis.internal:6379"
+  APP_ENV = "production"
 
-# --- Process Definitions ---
+# ------------------------------------------------------------------
+# Process definitions
+# ------------------------------------------------------------------
+
 [processes]
   app = "uvicorn app.main:app --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*'"
   worker = "arq app.core.arq_worker.WorkerSettings"
 
-# --- Public HTTP Service for the API ---
-[[services]]
+# ------------------------------------------------------------------
+# Restart policy — ensures worker and API recover from failures
+# ------------------------------------------------------------------
+[[restart]]
+  policy = "always"
+  processes = ["worker"]
+
+[[restart]]
+  policy = "always"
   processes = ["app"]
+
+# ------------------------------------------------------------------
+# Services — for the web API
+# ------------------------------------------------------------------
+[[services]]
   internal_port = 8080
+  processes = ["app"]
   protocol = "tcp"
   auto_start_machines = true
   auto_stop_machines = false
+
+  [services.concurrency]
+    type = "connections"
+    soft_limit = 40
+    hard_limit = 50
 
   [[services.ports]]
     handlers = ["tls", "http"]
@@ -30,13 +52,21 @@ primary_region = "iad"
     handlers = ["http"]
     port = 80
 
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 50
-    soft_limit = 40
-
-# --- Machine Resources Per Process ---
+# ------------------------------------------------------------------
+# Virtual machine resources
+# ------------------------------------------------------------------
+# Web app: lighter, faster response focus
 [[vm]]
+  processes = ["app"]
+  size = "shared-cpu-1x"
+  cpus = 1
   memory = "1gb"
   cpu_kind = "shared"
-  cpus = 1
+
+# Worker: heavier compute for OpenAI, clustering, etc.
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-2x"
+  cpus = 2
+  memory = "2gb"
+  cpu_kind = "shared"
