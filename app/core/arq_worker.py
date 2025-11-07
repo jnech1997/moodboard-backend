@@ -243,7 +243,7 @@ async def run_worker_forever():
                     cron(worker_heartbeat, second=0),
                 ],
                 keep_result = 0,
-                max_jobs = 5,
+                max_jobs = 1,
             )
             logger.info("🚀 Starting ARQ worker...")
             await worker.async_run()

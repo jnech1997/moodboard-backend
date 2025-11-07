@@ -4,13 +4,12 @@ import base64
 import logging
 import json
 import asyncio
-import httpx
 from typing import List
 import requests
 from openai import OpenAI, RateLimitError
 
 # Environment
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), max_retries=0)
 PEXEL_API_KEY = os.getenv("PEXEL_API_KEY")
 
 # Logging
@@ -62,13 +61,9 @@ async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
         try:
             # Determine if the image is a URL or a local file path
             if url.startswith(("http://", "https://")):
-                # Remote URL case
-                semaphore = asyncio.Semaphore(2)
-                async with semaphore:
-                    async with httpx.AsyncClient(timeout=30.0) as http_client:
-                        response = await http_client.get(url)
-                        response.raise_for_status()
-                    img_bytes = response.content
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                img_bytes = response.content
             else:
                 # Local file path case
                 with open(url, "rb") as img_file:
@@ -78,39 +73,37 @@ async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
             img_b64 = base64.b64encode(img_bytes).decode("utf-8")
             data_url = f"data:image/jpeg;base64,{img_b64}"
 
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",  # low-cost model
-                messages=[
+            # call responses API with image + prompt
+            response = client.responses.create(
+                model="gpt-4.1-nano",
+                input=[
                     {
                         "role": "system",
-                        "content": "You describe images briefly and clearly."
+                        "content": "You describe images briefly and clearly.",
                     },
                     {
                         "role": "user",
                         "content": [
                             {
-                                "type": "text",
-                                "text": (
-                                    "\n1. Provide a description of the scene (1-2 sentences)."
-                                    "2. A short caption based on this image's vibe (5–7 words).\n"
-                                    "\nReturn the response in JSON format with 'description' and 'caption' keys."
-                                )
+                                "type": "input_text",
+                                "text": "\n1. Provide a description of the scene (1-2 sentences)."
+                                "2. A short poetic caption based on this image (5–7 words).\n"
+                                "\nReturn the response in JSON format with 'description' and 'caption' keys.",
                             },
-                            {"type": "image_url", "image_url": {"url": data_url}},
+                            {"type": "input_image", "image_url": data_url},
                         ],
                     },
                 ],
-                response_format={"type": "json_object"},
             )
-
-            raw_content = completion.choices[0].message.content.strip()
+            raw_content = response.output[0].content[0].text.strip()
+            if raw_content.startswith("```"):
+                raw_content = raw_content[
+                    raw_content.find("{") : raw_content.rfind("}") + 1
+                ]  # grab only inner JSON
             data = json.loads(raw_content)
 
             description = data["description"]
             caption = data["caption"]
-
-            await asyncio.sleep(1.5)
-
             embedding = await get_text_embedding(description)
 
             return description, caption, embedding
