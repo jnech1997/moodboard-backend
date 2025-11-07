@@ -181,8 +181,14 @@ async def restart_worker_via_api():
 
             # Fly returns a list of machine definitions; filter for ones running the 'worker' process
             worker_machines = [
-                m for m in machines
-                if "worker" in (m.get("processes") or [])
+                m
+                for m in machines
+                if (
+                    m.get("config", {}).get("metadata", {}).get("fly_process_group")
+                    == "worker"
+                    or m.get("config", {}).get("env", {}).get("FLY_PROCESS_GROUP")
+                    == "worker"
+                )
             ]
 
             if not worker_machines:
