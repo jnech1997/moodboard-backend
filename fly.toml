@@ -35,7 +35,7 @@ primary_region = "iad"
 # ------------------------------------------------------------------
 [[services]]
   internal_port = 8080
-  processes = ["app"]
+  processes = ["app", "worker"]
   protocol = "tcp"
   auto_start_machines = true
   auto_stop_machines = false
