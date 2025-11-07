@@ -87,7 +87,7 @@ async def generate_image_data(url: str) -> tuple[str, str, list[float]]:
                             {
                                 "type": "input_text",
                                 "text": "\n1. Provide a description of the scene (1-2 sentences)."
-                                "2. A short poetic caption based on this image (5–7 words).\n"
+                                "2. A short poetic caption based on this image's vibe. Avoid 'silence' or 'whispers' in the caption. (5–7 words).\n"
                                 "\nReturn the response in JSON format with 'description' and 'caption' keys.",
                             },
                             {"type": "input_image", "image_url": data_url},
