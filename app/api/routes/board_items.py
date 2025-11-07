@@ -153,17 +153,14 @@ async def upload_item_image(
     # Store relative path in DB
     relative_static_url = f"{filename}"  # not including `/static/`
 
-    # Construct full URL using FastAPI
-    full_image_url = request.url_for("static", path=relative_static_url)
-
     # Generate metadata
-    description, caption, embedding = await generate_image_data(str(full_image_url))
+    description, caption, embedding = await generate_image_data(file_path)
 
     # Save item
     item = Item(
         board_id=board_id,
         type="image",
-        image_url=f"/static/{relative_static_url}",  # keep as relative path in DB
+        image_url=f"/static/{relative_static_url}",  # keep as relative path in DB 
         content=caption,
         embedding=embedding,
     )
