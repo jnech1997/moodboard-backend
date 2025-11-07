@@ -18,7 +18,7 @@ from sklearn.cluster import KMeans
 from openai import AsyncOpenAI, RateLimitError
 
 from app.db.session import async_session
-from app.db.models import Item
+from app.db.models import Item, Board
 from app.db.models.cluster_label import ClusterLabel
 from app.core.services import get_text_embedding, generate_image_data
 
@@ -117,104 +117,100 @@ async def cleanup_failed_item(item_id: int):
         else:
             logger.warning(f"⚠️ Item {item_id} not found during deletion")
 
+
+
 async def cluster_embeddings(ctx, board_id: int):
-    """Cluster items for a board based on their embeddings and label the clusters."""
-    lock_key = "cluster_lock"
-    redis = ctx["redis"]
-
-    # Acquire lock to prevent concurrent clustering
-    if not await redis.set(lock_key, "1", nx=True, ex=15):
-        logger.warning("⚠️ Clustering already running. Skipping.")
-        return
-    await redis.expire(lock_key, 300)
-
+    """Cluster items for a single board and save the labels."""
     try:
-        logger.info("🔹 Starting clustering job...")
+        logger.info(f"🔹 Starting clustering job for board {board_id}...")
 
-        # Retrieve items with embeddings
         async with async_session() as db:
-            async with db.begin():
-                # Clear all cluster IDs for this board before reclustering
-                await db.execute(
-                    update(Item)
-                    .where(Item.board_id == board_id)
-                    .values(cluster_id=None)
+            await db.execute(update(Board).where(Board.id == board_id).values(is_clustering=True))
+            await db.commit()
+
+            # Fetch items with embeddings for this board
+            result = await db.execute(
+                select(Item).where(
+                    Item.board_id == board_id,
+                    Item.embedding.isnot(None),
                 )
+            )
+            items = result.scalars().all()
+            if not items:
+                logger.warning(f"No items found to cluster for board {board_id}.")
+                return
 
-                result = await db.execute(
-                    select(Item).where(
-                        Item.board_id == board_id,
-                        Item.embedding.isnot(None),
-                    )
-                )
-                items = result.scalars().all()
-                if not items:
-                    logger.warning("No items found to cluster.")
-                    return
+            # Prepare embeddings and fit clustering
+            embeddings = [i.embedding for i in items]
+            n_clusters = min(5, len(embeddings))
+            logger.info(
+                f"🧠 Clustering {len(items)} items into {n_clusters} clusters for board {board_id}."
+            )
 
-                embeddings = [i.embedding for i in items]
-                n_clusters = min(5, len(embeddings))
+            kmeans = KMeans(n_clusters=n_clusters, n_init=10)
+            labels = kmeans.fit_predict(embeddings)  # type: ignore
 
-                # Perform KMeans clustering
-                kmeans = KMeans(n_clusters=n_clusters, n_init=10)
-                labels = kmeans.fit_predict(embeddings)  # type: ignore
+            # Update cluster_id in memory
+            for item, cluster_id in zip(items, labels):
+                item.cluster_id = int(cluster_id)
 
-                for item, cluster_id in zip(items, labels):
-                    item.cluster_id = int(cluster_id)  # type: ignore
-                logger.info(f"✅ Assigned cluster IDs for {len(items)} items.")
+            # Clear old labels for this board
+            await db.execute(
+                delete(ClusterLabel).where(ClusterLabel.board_id == board_id)
+            )
 
-                # Delete old cluster labels
-                await db.execute(delete(ClusterLabel))
+            # Apply updated cluster IDs and stage items for commit
+            for item in items:
+                db.add(item)
 
-        # Generate descriptive labels for each cluster
-        async with async_session() as db:
+            logger.info(f"✅ Updated cluster IDs for board {board_id}.")
+
+            # Label clusters using OpenAI
             statements = []
-
             for cluster_id in range(n_clusters):
-                contents = [i.content for i in items if bool(i.cluster_id == cluster_id)]
-                sample_text = ", ".join(contents[:3]) # type: ignore
-                prompt = f"Name this group of items: {sample_text}"
+                cluster_items = [i.content for i in items if i.cluster_id == cluster_id]
+                preview_text = ", ".join(cluster_items[:3])  # sample text for naming
+                prompt = f"Name this group of items: {preview_text}"
 
                 completion = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {
                             "role": "system",
-                            "content": (
-                                "You name clusters of similar text. Be descriptive and "
-                                "come up with a title that's not just Cluster 0, Cluster 1, etc. "
-                                "Don't return the title in quotes."
-                            ),
+                            "content": "Name the topic of this group of items in a descriptive title.",
                         },
                         {"role": "user", "content": prompt},
                     ],
                 )
                 label_name = str(completion.choices[0].message.content).strip()
-                logger.info(f"💬 Cluster {cluster_id}: {label_name}")
+                logger.info(
+                    f"💬 Cluster {cluster_id} on board {board_id}: {label_name}"
+                )
 
                 statements.append(
                     insert(ClusterLabel)
-                    .values(cluster_id=cluster_id, label=label_name)
-                    .on_conflict_do_update(
-                        index_elements=[ClusterLabel.cluster_id],
-                        set_={"label": label_name},
-                    )
+                    .values(cluster_id=cluster_id, board_id=board_id, label=label_name)
                 )
 
-            # Commit all label inserts in a single transaction
-            async with db.begin():
-                for stmt in statements:
-                    await db.execute(stmt)
+            # Execute all label statements
+            for stmt in statements:
+                await db.execute(stmt)
+            
+            await db.execute(update(Board).where(Board.id == board_id).values(is_clustering=False))
 
-            logger.info("✅ All cluster labels committed in one transaction.")
+            # Final commit for everything
+            await db.commit()
+            logger.info(f"🏁 Clustering complete for board {board_id}.")
 
     except Exception as e:
-        logger.error(f"❌ Clustering failed: {e}", exc_info=True)
+        await db.execute(
+            update(Board).where(Board.id == board_id).values(is_clustering=False)
+        )
+        await db.commit()
+        logger.error(f"❌ Clustering failed on board {board_id}: {e}", exc_info=True)
 
     finally:
-        # Ensure the lock is always released
-        await redis.delete(lock_key)
-        await asyncio.sleep(0.1)  # Slight delay to ensure lock is cleared
+        await asyncio.sleep(0.1)
 
 
 # Retry behavior for clustering jobs

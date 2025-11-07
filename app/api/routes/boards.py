@@ -205,14 +205,23 @@ async def list_clusters(
     db: AsyncSession = Depends(get_db),
 ):
     """List all clusters for items in this board."""
+    board = await db.get(Board, board_id)
+    if board and board.is_clustering:
+        return []
+        
+    # Get items for this board that have embeddings (i.e., have been clustered)
     result = await db.execute(
         select(Item).where((Item.board_id == board_id) & (Item.embedding.isnot(None)))
     )
     items = result.scalars().all()
 
-    label_result = await db.execute(select(ClusterLabel))
+    # Fetch only cluster labels for this board
+    label_result = await db.execute(
+        select(ClusterLabel).where(ClusterLabel.board_id == board_id)
+    )
     labels = {c.cluster_id: c.label for c in label_result.scalars().all()}
 
+    # Group items by cluster
     return [
         {
             "cluster_id": cid,
@@ -238,6 +247,9 @@ async def delete_board(
 
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
+    
+    # Delete all cluster labels linked to this board
+    await db.execute(delete(ClusterLabel).where(ClusterLabel.board_id == board.id))
 
     # Delete all items linked to this board
     await db.execute(delete(Item).where(Item.board_id == board_id))
