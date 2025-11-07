@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import time
+import random
 from typing import cast
 
 from pgvector.sqlalchemy import Vector
@@ -14,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from sklearn.cluster import KMeans
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 from app.db.session import async_session
 from app.db.models import Item
@@ -59,36 +60,62 @@ async def generate_embedding(ctx, item_id: int, content: str, board_id: int):
             await db.commit()
 
 
+MAX_RETRIES = 5
+
 async def process_image_item(ctx, item_id: int, image_url: str, board_id: int):
     """Process image entry: generate description, caption, embedding."""
     logger.info(f"🔹 Processing image item {item_id}")
 
-    try:
-        description, caption, embedding = await generate_image_data(image_url)
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            # May throw RateLimitError or other OpenAI exception
+            description, caption, embedding = await generate_image_data(image_url)
 
-        async with async_session() as db:
-            item = await db.get(Item, item_id)
-            if not item:
-                logger.warning(f"⚠️ Item {item_id} not found")
+            # Store content + embedding
+            async with async_session() as db:
+                item = await db.get(Item, item_id)
+                if not item:
+                    logger.warning(f"⚠️ Item {item_id} not found")
+                    return
+
+                item.content = caption  # Poetic caption for display
+                item.embedding = embedding  # Derived from description
+                await db.commit()
+
+            logger.info(f"✅ Stored processed image item {item_id}")
+            break  # Exit retry loop once successful
+
+        except RateLimitError as e:
+            if attempt < MAX_RETRIES:
+                # Exponential backoff with jitter between 1s and ~30s
+                backoff = min(2**attempt + random.random(), 30)
+                logger.warning(
+                    f"⚠️ Rate limited→ retry {attempt}/{MAX_RETRIES} in {backoff:.2f}s for item {item_id}"
+                )
+                await asyncio.sleep(backoff)
+            else:
+                logger.error(
+                    f"❌ Max retries reached for item {item_id}: {e}", exc_info=True
+                )
+                await cleanup_failed_item(item_id)
                 return
 
-            item.content = caption  # Poetic caption for display
-            item.embedding = embedding  # Derived from description
+        except Exception as e:
+            logger.error(f"❌ Unexpected error for item {item_id}: {e}", exc_info=True)
+            await cleanup_failed_item(item_id)
+            return
+
+
+async def cleanup_failed_item(item_id: int):
+    """Helper: delete failed item from DB (idempotent)."""
+    async with async_session() as db:
+        item = await db.get(Item, item_id)
+        if item:
+            await db.delete(item)
             await db.commit()
-
-        logger.info(f"✅ Stored processed image item {item_id}")
-
-    except Exception as e:
-        logger.error(f"❌ Failed to process image item {item_id}: {e}", exc_info=True)
-
-        async with async_session() as db:
-            item = await db.get(Item, item_id)
-            if item:
-                await db.delete(item)
-                await db.commit()
-                logger.info(f"🗑️ Removed failed image item {item_id}")
-            else:
-                logger.warning(f"⚠️ Item {item_id} not found during deletion")
+            logger.info(f"🗑️ Removed failed image item {item_id}")
+        else:
+            logger.warning(f"⚠️ Item {item_id} not found during deletion")
 
 async def cluster_embeddings(ctx, board_id: int):
     """Cluster items for a board based on their embeddings and label the clusters."""
