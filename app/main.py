@@ -179,31 +179,29 @@ async def restart_worker_via_api():
             res.raise_for_status()
             machines = res.json()
 
-            # 2. Filter for the worker machine
-            worker = next(
-                (
-                    m
-                    for m in machines
-                    if m.get("config", {}).get("metadata", {}).get("process")
-                    == "worker"
-                ),
-                None,
-            )
-            if not worker:
-                logger.error("❌ No worker machine found to restart.")
-                return
+            # Fly returns a list of machine definitions; filter for ones running the 'worker' process
+            worker_machines = [
+                m for m in machines
+                if "worker" in (m.get("processes") or [])
+            ]
 
-            machine_id = worker["id"]
-            logger.warning(f"🚨 Restarting worker machine {machine_id}...")
+            if not worker_machines:
+                logger.error("❌ No worker machine found to restart")
+                return False
 
-            # 3. Trigger the restart
-            restart_res = await client.post(
-                f"https://api.machines.dev/v1/apps/{FLY_APP_NAME}/machines/{machine_id}/restart",
+            # Select first worker machine
+            worker = worker_machines[0]
+            worker_id = worker["id"]
+            logger.info(f"🔄 Restarting worker {worker_id}...")
+
+            res = httpx.post(
+                f"https://api.machines.dev/v1/apps/{FLY_APP_NAME}/machines/{worker_id}/restart",
                 headers={"Authorization": f"Bearer {FLY_API_TOKEN}"},
             )
-            restart_res.raise_for_status()
+            res.raise_for_status()
+            logger.info("✅ Worker restarted successfully")
+            return True
 
-            logger.info(f"✅ Worker machine {machine_id} restart triggered")
 
     except Exception as e:
         logger.error(f"⚠️ Failed to restart worker via API: {e}", exc_info=True)

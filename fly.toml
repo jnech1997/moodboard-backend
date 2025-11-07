@@ -71,5 +71,3 @@ primary_region = "iad"
   cpus = 2
   memory = "2gb"
   cpu_kind = "shared"
-  [vm.metadata]
-    process = "worker"
