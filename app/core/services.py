@@ -238,7 +238,7 @@ async def generate_text_snippets(title: str, count: int = 3) -> List[str]:
     """Generate aesthetic text snippets based on a theme."""
     prompt = (
         f"Generate {count} short, aesthetic text snippets inspired by the theme '{title}'. "
-        "Each one should be 5-10 words max, evocative and abstract. "
+        "Each one should be 5-10 words max, evocative and abstract. They should never be sexual in nature. "
         "Do not use numbering. Write them on separate lines."
     )
 
