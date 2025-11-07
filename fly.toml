@@ -56,18 +56,9 @@ primary_region = "iad"
 # ------------------------------------------------------------------
 # Virtual machine resources
 # ------------------------------------------------------------------
-# Web app: lighter, faster response focus
 [[vm]]
-  processes = ["app"]
+  processes = ["app", "worker"]
   size = "shared-cpu-1x"
   cpus = 1
   memory = "1gb"
-  cpu_kind = "shared"
-
-# Worker: heavier compute for OpenAI, clustering, etc.
-[[vm]]
-  processes = ["worker"]
-  size = "shared-cpu-2x"
-  cpus = 2
-  memory = "2gb"
   cpu_kind = "shared"
