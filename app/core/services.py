@@ -153,8 +153,8 @@ async def check_image_safe(image_path: str) -> bool:
                 {
                     "role": "system",
                     "content": (
-                        "Respond 'safe' if the image is safe for work, "
-                        "or 'unsafe' otherwise."
+                        "Respond 'unsafe' if the image contains any sexually explicit or otherwise inappropriate content, "
+                        "or 'safe' otherwise."
                     ),
                 },
                 {
