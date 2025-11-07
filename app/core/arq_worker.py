@@ -251,6 +251,8 @@ async def run_worker_forever():
             )
             logger.info("🚀 Starting ARQ worker...")
             await worker.async_run()
+        except asyncio.CancelledError:
+            logger.warning("🌀 Worker shutdown triggered by CancelledError — safe to ignore.")
         except Exception as e:
             logger.error(f"❌ Worker crashed: {e}", exc_info=True)
             logger.info(f"🔁 Restarting worker in {backoff} seconds...")
