@@ -135,12 +135,10 @@ async def health(request: Request):
         else:
             status["worker"] = "not reporting"
             http_status = 503
-            await restart_worker_via_api()
 
     except Exception as e:
         status["worker"] = f"error: {e}"
         http_status = 503
-        await restart_worker_via_api()
 
     return JSONResponse(content=status, status_code=http_status)
 
