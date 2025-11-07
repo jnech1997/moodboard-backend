@@ -35,7 +35,7 @@ primary_region = "iad"
 # ------------------------------------------------------------------
 [[services]]
   internal_port = 8080
-  processes = ["app", "worker"]
+  processes = ["app"]
   protocol = "tcp"
   auto_start_machines = true
   auto_stop_machines = false
@@ -56,9 +56,18 @@ primary_region = "iad"
 # ------------------------------------------------------------------
 # Virtual machine resources
 # ------------------------------------------------------------------
+# Web app: lighter, faster response focus
 [[vm]]
-  processes = ["app", "worker"]
+  processes = ["app"]
   size = "shared-cpu-1x"
   cpus = 1
   memory = "1gb"
+  cpu_kind = "shared"
+
+# Worker: heavier compute for OpenAI, clustering, etc.
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-2x"
+  cpus = 2
+  memory = "2gb"
   cpu_kind = "shared"
