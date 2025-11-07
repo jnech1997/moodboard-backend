@@ -9,6 +9,7 @@ primary_region = "iad"
 [env]
   REDIS_URL = "redis://moodboard-redis.internal:6379/0"
   APP_ENV = "production"
+  FLY_API_TOKEN = "FlyV1 fm2_lJPECAAAAAAACs0ixBCOLRX8+gqLwxGwck4QfyYlwrVodHRwczovL2FwaS5mbHkuaW8vdjGWAJLOABRQIx8Lk7lodHRwczovL2FwaS5mbHkuaW8vYWFhL3YxxDygyr3vWzo2p3Z3AhmfE22Nu9UeHIqPsTefUNqcQvKDBAz7nlz7lzoFFR2EtRm8ohEb3xRsSzRsWmUJClLETtmN0HTGExPmF7I/wznXrmDWmEtw2rGQKgtBHQkaETQ10TTuFxD5qLTdEGi01VxxAGetbo0YNPSFUSID/MwKsQAAFSKJ7qVQFnF7B7M3zQ2SlAORgc4Aq9ywHwWRgqdidWlsZGVyH6J3Zx8BxCABgxRDTqi7pVc0SAyRo7VUweUyL9gVLvK0JFKh5PZlBg==,fm2_lJPETtmN0HTGExPmF7I/wznXrmDWmEtw2rGQKgtBHQkaETQ10TTuFxD5qLTdEGi01VxxAGetbo0YNPSFUSID/MwKsQAAFSKJ7qVQFnF7B7M3zcQQCvmk6F9Mr5uIGuOACIIR+8O5aHR0cHM6Ly9hcGkuZmx5LmlvL2FhYS92MZgEks5pDToQzo6lQC4XzgATgvkKkc4AE4L5DMQQncb0foHs7SQK7U57iKqlksQgNJHtq8QWxMpb4gmWlmt+l46c1j4jWnlM+BsKvm4C15Y="
 
 # ------------------------------------------------------------------
 # Process definitions
@@ -70,3 +71,5 @@ primary_region = "iad"
   cpus = 2
   memory = "2gb"
   cpu_kind = "shared"
+  [vm.metadata]
+    process = "worker"

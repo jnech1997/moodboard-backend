@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +23,8 @@ logger = logging.getLogger("root")
 
 # Detect environment (default to production)
 ENV = os.getenv("APP_ENV", "production").lower()
+FLY_API_TOKEN = os.getenv("FLY_API_TOKEN")
+FLY_APP_NAME = "moodboard"
 
 
 @asynccontextmanager
@@ -132,9 +135,12 @@ async def health(request: Request):
         else:
             status["worker"] = "not reporting"
             http_status = 503
+            await restart_worker_via_api()
+
     except Exception as e:
         status["worker"] = f"error: {e}"
         http_status = 503
+        await restart_worker_via_api()
 
     return JSONResponse(content=status, status_code=http_status)
 
@@ -155,3 +161,49 @@ async def reconnect_redis_with_backoff(max_retries: int = 3, base_delay: float =
             logger.warning(f"Redis reconnect attempt {attempt + 1} failed: {e}")
             await asyncio.sleep(wait_time)
     raise RuntimeError("Failed to reconnect to Redis after multiple attempts")
+
+
+async def restart_worker_via_api():
+    """
+    Restart the Fly.io worker machine using the Machines HTTP API.
+    Assumes you labeled your worker machines with `process=worker`.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. Get machine list
+            logger.warning(f"🚨 Fly api token is:  {FLY_API_TOKEN}...")
+            res = await client.get(
+                f"https://api.machines.dev/v1/apps/{FLY_APP_NAME}/machines",
+                headers={"Authorization": f"Bearer {FLY_API_TOKEN}"},
+            )
+            res.raise_for_status()
+            machines = res.json()
+
+            # 2. Filter for the worker machine
+            worker = next(
+                (
+                    m
+                    for m in machines
+                    if m.get("config", {}).get("metadata", {}).get("process")
+                    == "worker"
+                ),
+                None,
+            )
+            if not worker:
+                logger.error("❌ No worker machine found to restart.")
+                return
+
+            machine_id = worker["id"]
+            logger.warning(f"🚨 Restarting worker machine {machine_id}...")
+
+            # 3. Trigger the restart
+            restart_res = await client.post(
+                f"https://api.machines.dev/v1/apps/{FLY_APP_NAME}/machines/{machine_id}/restart",
+                headers={"Authorization": f"Bearer {FLY_API_TOKEN}"},
+            )
+            restart_res.raise_for_status()
+
+            logger.info(f"✅ Worker machine {machine_id} restart triggered")
+
+    except Exception as e:
+        logger.error(f"⚠️ Failed to restart worker via API: {e}", exc_info=True)
