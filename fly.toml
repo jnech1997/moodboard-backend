@@ -67,7 +67,7 @@ primary_region = "iad"
 # Worker: heavier compute for OpenAI, clustering, etc.
 [[vm]]
   processes = ["worker"]
-  size = "shared-cpu-2x"
-  cpus = 2
-  memory = "2gb"
+  size = "shared-cpu-1x"
+  cpus = 1
+  memory = "1gb"
   cpu_kind = "shared"
