@@ -1,6 +1,6 @@
 # MoodBoard Backend — FastAPI + Redis Worker + PostgreSQL
 
-This is the backend API for MoodBoard, a visual mood collection and AI-powered clustering platform. It handles all API routes, database operations, async background clustering via Redis workers, and OpenAI-powered AI features: live at https://moodboard.fly.dev/docs.
+This is the backend API for MoodBoard, a visual mood collection and AI-powered clustering platform. It handles all API routes, database operations, async background clustering via Redis workers, and OpenAI-powered AI features
 
 ---
 
