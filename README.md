@@ -4,7 +4,7 @@ This is the backend API for MoodBoard, a visual mood collection and AI-powered c
 
 ---
 
-## 🚀 Tech Stack
+## Tech Stack
 
 - FastAPI – web framework & OpenAPI docs
 - SQLAlchemy – ORM & async DB handling
@@ -17,7 +17,7 @@ This is the backend API for MoodBoard, a visual mood collection and AI-powered c
 
 ---
 
-## 🧠 Features
+## Features
 
 - RESTful CRUD for Boards, Items, and Clusters
 - Async background jobs via Redis + Arq
@@ -25,7 +25,7 @@ This is the backend API for MoodBoard, a visual mood collection and AI-powered c
 - GPT-powered cluster labeling
 - /static for image uploads
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 backend/
@@ -59,7 +59,7 @@ backend/
 └── README.md                # Project docs (auto-deployed from this file)
 ```
 
-## 🛠️ Local Development
+## Local Development
 
 ### 1. Clone & Install
 
@@ -93,7 +93,7 @@ http://localhost:8080/api/docs
 
 ---
 
-## 🚢 Deploying to Fly.io
+## Deploying to Fly.io
 
 ```bash
 fly launch --name moodboard
@@ -104,12 +104,3 @@ fly secrets set OPENAI_API_KEY=...
 fly secrets set PEXEL_API_KEY=your_pexel_key_here
 fly deploy
 ```
-
----
-
-## 👤 Author
-
-Joseph Nechleba  
-https://josephnechleba.com
-
----
